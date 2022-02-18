@@ -15,5 +15,5 @@ class Entorno(gym.Env):
     def render(self, window, mode="human"):
         color=(100, 255, 0)
         window.fill(color)
-        pygame.draw.line(window, (0, 0, 0), (random.randint(0, 1000), random.randint(0, 500)),
-                         (random.randint(0, 1000), random.randint(0, 500)), 2)
+        pygame.draw.line(window, (0, 0, 0), (np.random.randint(0, 1000), np.random.randint(0, 500)),
+                         (np.random.randint(0, 1000), np.random.randint(0, 500)), 2)

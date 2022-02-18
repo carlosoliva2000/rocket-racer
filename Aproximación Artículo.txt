@@ -1,0 +1,23 @@
+Juego(Env):
+	init: define action_space y observation_space. Contiene un entorno y un cohete. Contiene la ventana donde se representa todo
+	step: mueve el cohete, actualiza su raycast, comprueba colisiones, obtiene observaciones y recompensa por la acción realizada
+	reset
+	render: renderiza fondo, checkpoints (meta, siguiente, todos), rayos del raycast, segmentos del nivel, cohete y gui
+	muchas funciones que deberían estar dentro del resto de clases
+
+Entorno:
+	init: define el nivel hardcoded o random basandose en parametros de Juego (opciones entorno y opciones cámara)
+	generate_level_vectors_random: genera el nivel aleatorio, primero generando segmentos y luego aplicándoles anchura y goals (checkpoints)
+	move_env: mueve el nivel para que el jugador parezca centrado en pantalla
+
+Cohete:
+	init: define su posición y velocidad, el nivel (checkpoint) en el que está y el anterior, la recompensa y actualiza raycast
+	3 funciones para calcular la recompensa, una estática (+1), una contínua (distancia al anterior y siguiente checkpoint) y una dinámica (tiempo en cruzar siguiente checkpoint)
+	update_echo_vectors: coloca el punto de origen de los rayos alrededor del cohete
+	rotate: rotar el cohete y deja su angulo en [-pi, pi]
+	accelerate: acelera el cohete (transforma su velocidad, no su posición)
+	update_observations: obtiene las diferentes observaciones del entorno
+	move: rota, acelera y mueve el cohete (en función de la cámara)
+	check_collision_goal: detecta si se ha traspasado un checkpoint o si se ha retrocedido (mediante vector movimiento), actualizando su cp actual, el anterior y el siguiente
+	check_collision_env: detecta si se ha colisionado con un elemento del entorno (mediante vector movimiento)
+	check_collision_echo: calcula los puntos de intersección de cada raycast con el entorno, actualizando sus valores

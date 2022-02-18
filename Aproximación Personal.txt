@@ -1,0 +1,26 @@
+Juego(Env):
+	init: define action_space y observation_space. Contiene referencias a entorno y cohetes. Contiene ventana donde renderizar todo. 
+	step: actualiza el cohete con su acción, comprueba estado colisión, obtiene las observaciones del cohete, obtiene las recompensas del cohete.
+	reset
+	render: renderiza el entorno, los cohetes y gui.
+
+Entorno:
+	init: llama a la función inicializar.
+	inicializar: llama a la función generar_nivel, carga el número de checkpoints.
+	generar_nivel: genera el nivel aleatorio, primero generando segmentos y luego aplicándoles anchura, y checkpoints.
+	mover: desplaza los elementos del entorno para que el jugador permanezca centrado.
+	obtener_checkpoint_sig: dado el checkpoint actual, devuelve el siguiente.
+	obtener_checkpoint_ant: dado el checkpoint actual, devuelve el anterior.
+
+Cohete:
+	init: define el entorno y llama a inicializar.
+	inicializar: define posición, velocidad, checkpoints, recompensa y actualiza raycast.
+	actualizar: rota, acelera y mueve, comprueba colisiones, actualiza el raycast, actualiza las observaciones y su recompensa.
+	rotar: rotar el cohete y deja su angulo en [0, 2pi].
+	acelerar: acelera el cohete (transforma su velocidad, no su posición).
+	mover: rota, acelera y mueve el cohete, generando vector movimiento.
+	comprobar_colision_checkpoints: detecta si se ha traspasado un checkpoint o si se ha retrocedido (mediante vector movimiento), actualizando su cp actual, el anterior y el siguiente.
+	comprobar_colision_entorno: detecta si se ha colisionado con un elemento del entorno (mediante vector movimiento). Activa flag_colision.
+	actualizar_raycast: actualiza cada rayo, colocandolo alrededor del cohete y definiendo su longitud.
+	actualizar_observaciones: almacena en observaciones las distancias de los rayos y otras necesarias.
+	actualizar_recompensa: almacena en recompensa los puntos obtenidos en esa actualización.

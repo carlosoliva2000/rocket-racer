@@ -31,7 +31,7 @@ class Entorno:
         """
         longitud_min = 60
         longitud_max = 150
-        d_ang = 0 # 0.5  # 0.8
+        d_ang = 0.5  # 0.8
         anchura_min = 50
         anchura_max = 150
         d_anchura = 5
@@ -152,10 +152,6 @@ class Entorno:
         self.bordes2 = bordes2
         self.checkpoints = checkpoints
 
-        print("---")
-        print(self.checkpoints)
-        print("---")
-
     def mover(self, dx, dy):
         """
         Desplaza los elementos del entorno para que el jugador permanezca centrado.
@@ -170,8 +166,8 @@ class Entorno:
         Dado el checkpoint actual, devuelve el siguiente.
         :return: número de checkpoint siguiente y sus coordenadas.
         """
-        if n_checkpoint+1 < len(self.checkpoints):
-            return n_checkpoint+1, self.checkpoints[n_checkpoint+1]
+        if n_checkpoint + 1 < len(self.checkpoints):
+            return n_checkpoint + 1, self.checkpoints[n_checkpoint + 1]
         else:
             return n_checkpoint, self.checkpoints[n_checkpoint]
 
@@ -180,8 +176,8 @@ class Entorno:
         Dado el checkpoint actual, devuelve el anterior.
         :return: número de checkpoint anterior y sus coordenadas.
         """
-        if n_checkpoint-1 >= 0:
-            return n_checkpoint-1, self.checkpoints[n_checkpoint-1]
+        if n_checkpoint - 1 >= 0:
+            return n_checkpoint - 1, self.checkpoints[n_checkpoint - 1]
         else:
             return 0, self.checkpoints[0]
 
@@ -193,7 +189,7 @@ class Entorno:
 
         for i in range(len(self.recorrido) - 1):
             # Checkpoints
-            if i < len(self.recorrido)-2:
+            if i < len(self.recorrido) - 2:
                 pygame.draw.line(ventana, (80, 80, 80), self.checkpoints[i, :2], self.checkpoints[i, 2:])
             # pygame.draw.line(ventana, (80, 80, 80), self.bordes1[i], self.bordes2[i], 3)
 
@@ -208,7 +204,7 @@ class Entorno:
 
             pygame.draw.line(ventana, (0, 0, 255), self.bordes2[i], self.bordes2[i + 1], 3)
             pygame.draw.circle(ventana, (0, 0, 122), self.bordes2[i + 1], 5, 0)
-        #pygame.draw.line(ventana, (80, 80, 80), self.checkpoints[51, :2], self.checkpoints[51, 2:])
+        # pygame.draw.line(ventana, (80, 80, 80), self.checkpoints[51, :2], self.checkpoints[51, 2:])
 
 
 class Cohete:
@@ -247,9 +243,6 @@ class Cohete:
         self.raycast = None
 
         # self.inicializar()
-
-        print(self.checkpoint)
-        print(self.checkpoint_sig)
 
     def inicializar(self, x=0):
         """
@@ -309,20 +302,56 @@ class Cohete:
         Detecta si se ha traspasado un checkpoint o si se ha retrocedido (mediante vector movimiento),
         actualizando su cp actual, el anterior y el siguiente.
         """
+        # Comprobamos colisiones hacia adelante
+
+        n_checkpoint_atravesado = 0
+        colision = False
+        for i in range(self.n_checkpoint_sig, len(self.entorno.checkpoints)):
+            checkpoint = self.entorno.checkpoints[i]
+            if self.interseccion(*self.vector_movimiento, *checkpoint):
+                # if i != self.n_checkpoint_sig:
+                #     print(f"HE SALTADO {i-self.n_checkpoint} PASOS")
+                self.n_checkpoint, self.checkpoint = i, checkpoint
+                self.n_checkpoint_sig, self.checkpoint_sig = self.entorno.obtener_checkpoint_sig(self.n_checkpoint)
+                # print(self.n_checkpoint)
+                colision = True
+                break
+                # n_checkpoint_atravesado = i
+
+        if not colision:
+            for i in range(self.n_checkpoint_sig, -1, -1):
+                checkpoint = self.entorno.checkpoints[i]
+                if self.interseccion(*self.vector_movimiento, *checkpoint):
+                    # if i != self.n_checkpoint:
+                    #    print(f"HE SALTADO {self.n_checkpoint_sig-i} PASOS")
+                    self.n_checkpoint, self.checkpoint = self.entorno.obtener_checkpoint_ant(i)
+                    self.n_checkpoint_sig, self.checkpoint_sig = self.entorno.obtener_checkpoint_sig(self.n_checkpoint)
+                    # print(self.n_checkpoint)
+                    break
+        """
+
+
         if self.interseccion(*self.vector_movimiento, *self.checkpoint_sig):
             # Si el cohete ha atravesado el siguiente checkpoint, avanzamos y actualizamos contadores y cps
             self.n_checkpoint, self.checkpoint = self.entorno.obtener_checkpoint_sig(self.n_checkpoint)
             self.n_checkpoint_sig, self.checkpoint_sig = self.entorno.obtener_checkpoint_sig(self.n_checkpoint)
-            print(f"Último checkpoint:    {self.n_checkpoint}")
+
+            # atravesados = [False] * len(self.entorno.checkpoints)
+            # for i in range(len(self.entorno.checkpoints)):
+            #    atravesados[i] = self.interseccion(*self.vector_movimiento, *self.entorno.checkpoints[i])
+            # print(atravesados)
+            #print(f"Último checkpoint:    {self.n_checkpoint}")
             print(f"Siguiente checkpoint: {self.n_checkpoint_sig}")
         elif self.interseccion(*self.vector_movimiento, *self.checkpoint):
             # Si el cohete ha atravesado el checkpoint anterior, retrocedemos el contador
             self.n_checkpoint, self.checkpoint = self.entorno.obtener_checkpoint_ant(self.n_checkpoint)
             self.n_checkpoint_sig, self.checkpoint_sig = self.entorno.obtener_checkpoint_sig(self.n_checkpoint)
-            print()
-            print(f"Último checkpoint:    {self.n_checkpoint}")
+
+            #print(f"Último checkpoint:    {self.n_checkpoint}")
             print(f"Siguiente checkpoint: {self.n_checkpoint_sig}")
-            print()
+        """
+
+
 
     def comprobar_colision_entorno(self):
         """
@@ -354,7 +383,7 @@ class Cohete:
             t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denominador
             u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denominador
             if 0 < t < 1 and 0 < u < 1:  # u>0 o 0 < u < 1
-                return x1+t*(x2-x1), y1+t*(y2-y1)
+                return x1 + t * (x2 - x1), y1 + t * (y2 - y1)
         return None
 
     def render(self, ventana):

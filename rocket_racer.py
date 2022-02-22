@@ -31,7 +31,7 @@ class Entorno:
         """
         longitud_min = 60
         longitud_max = 150
-        d_ang = 0.5  # 0.8
+        d_ang = 0 # 0.5  # 0.8
         anchura_min = 50
         anchura_max = 150
         d_anchura = 5
@@ -65,7 +65,7 @@ class Entorno:
 
             # Ángulo del nuevo segmento en función del anterior
             angulo = recorrido[i - 1, 2] + signo * np.random.rand() * d_ang
-            print(angulo)
+            # print(angulo)
             if angulo > np.pi:
                 angulo -= 2 * np.pi
             if angulo < -np.pi:
@@ -142,9 +142,19 @@ class Entorno:
         bordes1 = np.concatenate([borde1_inicio, bordes1], axis=0)
         bordes2 = np.concatenate([borde2_inicio, bordes2], axis=0)
 
-        self.recorrido = recorrido #[:, :2]
+        # Creamos los checkpoints como vectores que contienen los puntos en cada borde a lo largo de la pista
+        checkpoints = np.zeros((segmentos, 4))
+        checkpoints[:, [0, 1]] = np.copy(bordes1)[2:]
+        checkpoints[:, [2, 3]] = np.copy(bordes2)[2:]
+
+        self.recorrido = recorrido  # [:, :2]
         self.bordes1 = bordes1
         self.bordes2 = bordes2
+        self.checkpoints = checkpoints
+
+        print("---")
+        print(self.checkpoints)
+        print("---")
 
     def mover(self, dx, dy):
         """
@@ -153,20 +163,27 @@ class Entorno:
         self.recorrido -= (dx, dy)
         self.bordes1 -= (dx, dy)
         self.bordes2 -= (dx, dy)
+        self.checkpoints -= (dx, dy, dx, dy)  # Al tener 4 columnas, es necesario restar a todas ellas el dx y dy
 
-    def obtener_checkpoint_sig(self):
+    def obtener_checkpoint_sig(self, n_checkpoint=0):
         """
         Dado el checkpoint actual, devuelve el siguiente.
-        :return: checkpoint siguiente.
+        :return: número de checkpoint siguiente y sus coordenadas.
         """
-        pass
+        if n_checkpoint+1 < len(self.checkpoints):
+            return n_checkpoint+1, self.checkpoints[n_checkpoint+1]
+        else:
+            return n_checkpoint, self.checkpoints[n_checkpoint]
 
-    def obtener_checkpoint_ant(self):
+    def obtener_checkpoint_ant(self, n_checkpoint=0):
         """
         Dado el checkpoint actual, devuelve el anterior.
-        :return: checkpoint anterior.
+        :return: número de checkpoint anterior y sus coordenadas.
         """
-        pass
+        if n_checkpoint-1 >= 0:
+            return n_checkpoint-1, self.checkpoints[n_checkpoint-1]
+        else:
+            return 0, self.checkpoints[0]
 
     def render(self, ventana):
         """
@@ -176,9 +193,12 @@ class Entorno:
 
         for i in range(len(self.recorrido) - 1):
             # Checkpoints
-            pygame.draw.line(ventana, (80, 80, 80), self.bordes1[i], self.bordes2[i], 3)
+            if i < len(self.recorrido)-2:
+                pygame.draw.line(ventana, (80, 80, 80), self.checkpoints[i, :2], self.checkpoints[i, 2:])
+            # pygame.draw.line(ventana, (80, 80, 80), self.bordes1[i], self.bordes2[i], 3)
 
             # Carril central del recorrido
+            # pygame.draw.aaline(ventana, (122, 122, 122), self.recorrido[i], self.recorrido[i+1])
             pygame.draw.line(ventana, (122, 122, 122), self.recorrido[i], self.recorrido[i + 1], 3)
             pygame.draw.circle(ventana, (200, 200, 200), self.recorrido[i + 1], 5, 0)
 
@@ -188,6 +208,7 @@ class Entorno:
 
             pygame.draw.line(ventana, (0, 0, 255), self.bordes2[i], self.bordes2[i + 1], 3)
             pygame.draw.circle(ventana, (0, 0, 122), self.bordes2[i + 1], 5, 0)
+        #pygame.draw.line(ventana, (80, 80, 80), self.checkpoints[51, :2], self.checkpoints[51, 2:])
 
 
 class Cohete:
@@ -205,18 +226,19 @@ class Cohete:
         self.entorno = entorno
 
         # Posición y orientación
+        self.pos_inicial = pos_inicial  # Usado cuando se mueve el entorno en vez del cohete
         self.x = pos_inicial[0]
         self.y = pos_inicial[1]
         self.ang = 0  # Ángulo en radianes
+        self.vector_movimiento = None
 
         # Velocidad
         self.dx = 0
         self.dy = 0
 
         # Checkpoints
-        self.checkpoint_actual = 0
-        self.checkpoint_anterior = 0
-        self.checkpoint_siguiente = 0
+        self.n_checkpoint, self.checkpoint = entorno.obtener_checkpoint_ant()
+        self.n_checkpoint_sig, self.checkpoint_sig = entorno.obtener_checkpoint_sig()
 
         # Recompensa
         self.recompensa = 0
@@ -225,6 +247,9 @@ class Cohete:
         self.raycast = None
 
         # self.inicializar()
+
+        print(self.checkpoint)
+        print(self.checkpoint_sig)
 
     def inicializar(self, x=0):
         """
@@ -238,6 +263,8 @@ class Cohete:
         Rota, acelera y mueve, comprueba colisiones, actualiza el raycast, actualiza las observaciones y su recompensa.
         """
         self.mover(accion)
+
+        self.comprobar_colision_checkpoints()
 
     def rotar(self, rotacion):
         """
@@ -273,14 +300,29 @@ class Cohete:
         # Si queremos al cohete fijo en pantalla, entonces movemos el entorno
         self.entorno.mover(self.dx, self.dy)
 
-        # --------------------- VECTOR MOVIMIENTO -----------------------
+        # Se calcula el vector movimiento para comprobar colisiones posteriormente
+        # Contiene las componentes de posición en el instante inicial y en el posterior
+        self.vector_movimiento = [self.x, self.y, self.x + self.dx, self.y + self.dy]
 
     def comprobar_colision_checkpoints(self):
         """
         Detecta si se ha traspasado un checkpoint o si se ha retrocedido (mediante vector movimiento),
         actualizando su cp actual, el anterior y el siguiente.
         """
-        pass
+        if self.interseccion(*self.vector_movimiento, *self.checkpoint_sig):
+            # Si el cohete ha atravesado el siguiente checkpoint, avanzamos y actualizamos contadores y cps
+            self.n_checkpoint, self.checkpoint = self.entorno.obtener_checkpoint_sig(self.n_checkpoint)
+            self.n_checkpoint_sig, self.checkpoint_sig = self.entorno.obtener_checkpoint_sig(self.n_checkpoint)
+            print(f"Último checkpoint:    {self.n_checkpoint}")
+            print(f"Siguiente checkpoint: {self.n_checkpoint_sig}")
+        elif self.interseccion(*self.vector_movimiento, *self.checkpoint):
+            # Si el cohete ha atravesado el checkpoint anterior, retrocedemos el contador
+            self.n_checkpoint, self.checkpoint = self.entorno.obtener_checkpoint_ant(self.n_checkpoint)
+            self.n_checkpoint_sig, self.checkpoint_sig = self.entorno.obtener_checkpoint_sig(self.n_checkpoint)
+            print()
+            print(f"Último checkpoint:    {self.n_checkpoint}")
+            print(f"Siguiente checkpoint: {self.n_checkpoint_sig}")
+            print()
 
     def comprobar_colision_entorno(self):
         """
@@ -306,8 +348,14 @@ class Cohete:
         """
         pass
 
-    def interseccion(self):
-        pass
+    def interseccion(self, x1, y1, x2, y2, x3, y3, x4, y4):
+        denominador = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
+        if denominador:
+            t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denominador
+            u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denominador
+            if 0 < t < 1 and 0 < u < 1:  # u>0 o 0 < u < 1
+                return x1+t*(x2-x1), y1+t*(y2-y1)
+        return None
 
     def render(self, ventana):
         """
@@ -316,11 +364,20 @@ class Cohete:
         # pygame.draw.circle(ventana, self.COLOR, (self.x, self.y), 5.0)
         # pygame.draw.line(ventana, self.COLOR, (self.x, self.y), (self.x + np.cos(self.ang) * 10,
         #                                                         self.y + np.sin(self.ang) * 10))
-
+        # Cuerpo del cohete
         pygame.gfxdraw.aacircle(ventana, int(self.x), int(self.y), self.RADIO, self.COLOR)
         pygame.gfxdraw.filled_circle(ventana, int(self.x), int(self.y), self.RADIO, self.COLOR)
+
+        # Orientación
         pygame.draw.aaline(ventana, self.COLOR, (self.x, self.y), (self.x + np.cos(self.ang) * 2 * self.RADIO,
                                                                    self.y + np.sin(self.ang) * 2 * self.RADIO))
+
+        # Vector velocidad
+        pygame.draw.aaline(ventana, (0, 0, 122), self.vector_movimiento[:2], self.vector_movimiento[2:])
+
+        # Marcar siguiente y anterior checkpoint
+        pygame.draw.line(ventana, (0, 255, 255), self.checkpoint_sig[:2], self.checkpoint_sig[2:])
+        pygame.draw.line(ventana, (255, 0, 255), self.checkpoint[:2], self.checkpoint[2:])
 
 
 class Juego(gym.Env):

@@ -30,6 +30,7 @@ while True:
         break
 
     accion = manejar_entrada(list(pygame.key.get_pressed()))
+    # accion = [np.random.randint(-1, 2), np.random.randint(-1, 2)]  # Acción random
     juego.step(accion)
     juego.render()
     juego.clock.tick(30)

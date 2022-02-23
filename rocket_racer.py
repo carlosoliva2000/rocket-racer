@@ -239,9 +239,12 @@ class Cohete:
         # Recompensa
         self.recompensa = 0
 
-        # Raycast
-        self.raycast = None
+        # Flags
+        self.flag_colision = False
 
+        # Raycast
+        self.rayos = [Rayo(self, np.pi/2), Rayo(self, np.pi/4), Rayo(self, 0),
+                      Rayo(self, -np.pi/4), Rayo(self, -np.pi/2)]
         # self.inicializar()
 
     def inicializar(self, x=0):
@@ -258,6 +261,10 @@ class Cohete:
         self.mover(accion)
 
         self.comprobar_colision_checkpoints()
+        self.comprobar_colision_entorno()
+
+        for rayo in self.rayos:
+            rayo.actualizar()
 
     def rotar(self, rotacion):
         """
@@ -302,9 +309,9 @@ class Cohete:
         Detecta si se ha traspasado un checkpoint o si se ha retrocedido (mediante vector movimiento),
         actualizando su cp actual, el anterior y el siguiente.
         """
-        # Comprobamos colisiones hacia adelante
-
-        n_checkpoint_atravesado = 0
+        # Comprobamos colisiones hacia adelante partiendo desde la posición del cohete
+        # Este código es el equivalente al primer if, pero no funciona porque es necesario comprobar
+        # necesariamente todos los checkpoints, ya que la detección de colisión con el siguiente no es exacta
         colision = False
         for i in range(self.n_checkpoint_sig, len(self.entorno.checkpoints)):
             checkpoint = self.entorno.checkpoints[i]
@@ -313,11 +320,11 @@ class Cohete:
                 #     print(f"HE SALTADO {i-self.n_checkpoint} PASOS")
                 self.n_checkpoint, self.checkpoint = i, checkpoint
                 self.n_checkpoint_sig, self.checkpoint_sig = self.entorno.obtener_checkpoint_sig(self.n_checkpoint)
-                # print(self.n_checkpoint)
                 colision = True
                 break
-                # n_checkpoint_atravesado = i
 
+        # Si no hay colisión hacia adelante, puede haber ido hacia atrás
+        # Por la misma razón que antes, este es el equivalente al elif de abajo
         if not colision:
             for i in range(self.n_checkpoint_sig, -1, -1):
                 checkpoint = self.entorno.checkpoints[i]
@@ -326,38 +333,36 @@ class Cohete:
                     #    print(f"HE SALTADO {self.n_checkpoint_sig-i} PASOS")
                     self.n_checkpoint, self.checkpoint = self.entorno.obtener_checkpoint_ant(i)
                     self.n_checkpoint_sig, self.checkpoint_sig = self.entorno.obtener_checkpoint_sig(self.n_checkpoint)
-                    # print(self.n_checkpoint)
                     break
+
         """
-
-
+        #### CÓDIGO DEPRECADO/OBSOLETO ####
         if self.interseccion(*self.vector_movimiento, *self.checkpoint_sig):
             # Si el cohete ha atravesado el siguiente checkpoint, avanzamos y actualizamos contadores y cps
             self.n_checkpoint, self.checkpoint = self.entorno.obtener_checkpoint_sig(self.n_checkpoint)
             self.n_checkpoint_sig, self.checkpoint_sig = self.entorno.obtener_checkpoint_sig(self.n_checkpoint)
-
-            # atravesados = [False] * len(self.entorno.checkpoints)
-            # for i in range(len(self.entorno.checkpoints)):
-            #    atravesados[i] = self.interseccion(*self.vector_movimiento, *self.entorno.checkpoints[i])
-            # print(atravesados)
             #print(f"Último checkpoint:    {self.n_checkpoint}")
             print(f"Siguiente checkpoint: {self.n_checkpoint_sig}")
         elif self.interseccion(*self.vector_movimiento, *self.checkpoint):
             # Si el cohete ha atravesado el checkpoint anterior, retrocedemos el contador
             self.n_checkpoint, self.checkpoint = self.entorno.obtener_checkpoint_ant(self.n_checkpoint)
             self.n_checkpoint_sig, self.checkpoint_sig = self.entorno.obtener_checkpoint_sig(self.n_checkpoint)
-
             #print(f"Último checkpoint:    {self.n_checkpoint}")
             print(f"Siguiente checkpoint: {self.n_checkpoint_sig}")
         """
-
-
 
     def comprobar_colision_entorno(self):
         """
         Detecta si se ha colisionado con un elemento del entorno (mediante vector movimiento). Activa flag_colision.
         """
-        pass
+        for i in range(len(self.entorno.recorrido)-1):
+            # Comprobamos si se ha atravesado una pared mediante vector movimiento
+            if (self.interseccion(*self.vector_movimiento, *self.entorno.bordes1[i], *self.entorno.bordes1[i+1]) or
+                    self.interseccion(*self.vector_movimiento, *self.entorno.bordes2[i], *self.entorno.bordes2[i+1])):
+                self.COLOR = (0, 0, 0)
+                print("HE ATRAVESADO")
+                self.flag_colision = True
+                break
 
     def actualizar_raycast(self):
         """
@@ -390,6 +395,10 @@ class Cohete:
         """
         Renderiza el cohete
         """
+        # Renderizar rayos
+        for rayo in self.rayos:
+            rayo.render(ventana)
+
         # pygame.draw.circle(ventana, self.COLOR, (self.x, self.y), 5.0)
         # pygame.draw.line(ventana, self.COLOR, (self.x, self.y), (self.x + np.cos(self.ang) * 10,
         #                                                         self.y + np.sin(self.ang) * 10))
@@ -407,6 +416,36 @@ class Cohete:
         # Marcar siguiente y anterior checkpoint
         pygame.draw.line(ventana, (0, 255, 255), self.checkpoint_sig[:2], self.checkpoint_sig[2:])
         pygame.draw.line(ventana, (255, 0, 255), self.checkpoint[:2], self.checkpoint[2:])
+
+
+class Rayo:
+    def __init__(self, cohete, ang_offset):
+        self.cohete = cohete
+        self.x1 = cohete.x
+        self.y1 = cohete.y
+        self.ang = ang_offset
+        self.ang_offset = ang_offset
+        self.x2 = cohete.x
+        self.y2 = cohete.y
+
+    def actualizar(self):
+        # Actualizamos poisición en función de la del cohete
+        self.x1 = self.cohete.x
+        self.y1 = self.cohete.y
+
+        # Actualizamos ángulo en función del ángulo del cohete
+        self.ang = self.ang_offset + self.cohete.ang
+
+        # Actualizamos puntos de destino
+        self.x2 = self.x1 + np.cos(self.ang) * 200
+        self.y2 = self.y1 + np.sin(self.ang) * 200
+
+    def render(self, ventana):
+        """
+        Renderiza el rayo.
+        :param ventana: display o ventana donde se mostrará el rayo
+        """
+        pygame.draw.aaline(ventana, (0, 255, 0), (self.x1, self.y1), (self.x2, self.y2))
 
 
 class Juego(gym.Env):

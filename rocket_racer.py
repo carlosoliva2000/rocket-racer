@@ -5,6 +5,16 @@ import pygame
 from pygame import gfxdraw
 
 
+def interseccion(x1, y1, x2, y2, x3, y3, x4, y4):
+    denominador = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
+    if denominador:
+        t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denominador
+        u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denominador
+        if 0 < t < 1 and 0 < u < 1:  # u>0 o 0 < u < 1
+            return (x1 + t * (x2 - x1), y1 + t * (y2 - y1)), t
+    return None
+
+
 class Entorno:
     COLOR = (50, 50, 50)
 
@@ -243,8 +253,8 @@ class Cohete:
         self.flag_colision = False
 
         # Raycast
-        self.rayos = [Rayo(self, np.pi/2), Rayo(self, np.pi/4), Rayo(self, 0),
-                      Rayo(self, -np.pi/4), Rayo(self, -np.pi/2)]
+        self.rayos = [Rayo(self, np.pi / 2), Rayo(self, np.pi / 4), Rayo(self, 0),
+                      Rayo(self, -np.pi / 4), Rayo(self, -np.pi / 2)]
         # self.inicializar()
 
     def inicializar(self, x=0):
@@ -268,7 +278,7 @@ class Cohete:
 
     def rotar(self, rotacion):
         """
-        Rota el cohete y deja su angulo en [0, 2pi].
+        Rota el cohete y deja su angulo en [-pi, pi].
         """
         self.ang -= self.VEL_ROT * rotacion
 
@@ -315,7 +325,7 @@ class Cohete:
         colision = False
         for i in range(self.n_checkpoint_sig, len(self.entorno.checkpoints)):
             checkpoint = self.entorno.checkpoints[i]
-            if self.interseccion(*self.vector_movimiento, *checkpoint):
+            if interseccion(*self.vector_movimiento, *checkpoint):
                 # if i != self.n_checkpoint_sig:
                 #     print(f"HE SALTADO {i-self.n_checkpoint} PASOS")
                 self.n_checkpoint, self.checkpoint = i, checkpoint
@@ -328,7 +338,7 @@ class Cohete:
         if not colision:
             for i in range(self.n_checkpoint_sig, -1, -1):
                 checkpoint = self.entorno.checkpoints[i]
-                if self.interseccion(*self.vector_movimiento, *checkpoint):
+                if interseccion(*self.vector_movimiento, *checkpoint):
                     # if i != self.n_checkpoint:
                     #    print(f"HE SALTADO {self.n_checkpoint_sig-i} PASOS")
                     self.n_checkpoint, self.checkpoint = self.entorno.obtener_checkpoint_ant(i)
@@ -355,10 +365,10 @@ class Cohete:
         """
         Detecta si se ha colisionado con un elemento del entorno (mediante vector movimiento). Activa flag_colision.
         """
-        for i in range(len(self.entorno.recorrido)-1):
+        for i in range(len(self.entorno.recorrido) - 1):
             # Comprobamos si se ha atravesado una pared mediante vector movimiento
-            if (self.interseccion(*self.vector_movimiento, *self.entorno.bordes1[i], *self.entorno.bordes1[i+1]) or
-                    self.interseccion(*self.vector_movimiento, *self.entorno.bordes2[i], *self.entorno.bordes2[i+1])):
+            if (interseccion(*self.vector_movimiento, *self.entorno.bordes1[i], *self.entorno.bordes1[i + 1]) or
+                    interseccion(*self.vector_movimiento, *self.entorno.bordes2[i], *self.entorno.bordes2[i + 1])):
                 self.COLOR = (0, 0, 0)
                 print("HE ATRAVESADO")
                 self.flag_colision = True
@@ -381,15 +391,6 @@ class Cohete:
         Almacena en recompensa los puntos obtenidos en esa actualización.
         """
         pass
-
-    def interseccion(self, x1, y1, x2, y2, x3, y3, x4, y4):
-        denominador = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
-        if denominador:
-            t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denominador
-            u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denominador
-            if 0 < t < 1 and 0 < u < 1:  # u>0 o 0 < u < 1
-                return x1 + t * (x2 - x1), y1 + t * (y2 - y1)
-        return None
 
     def render(self, ventana):
         """
@@ -419,7 +420,7 @@ class Cohete:
 
 
 class Rayo:
-    def __init__(self, cohete, ang_offset):
+    def __init__(self, cohete, ang_offset, longitud_maxima = 1000):
         self.cohete = cohete
         self.x1 = cohete.x
         self.y1 = cohete.y
@@ -427,6 +428,7 @@ class Rayo:
         self.ang_offset = ang_offset
         self.x2 = cohete.x
         self.y2 = cohete.y
+        self.longitud_maxima = longitud_maxima
 
     def actualizar(self):
         # Actualizamos poisición en función de la del cohete
@@ -437,8 +439,35 @@ class Rayo:
         self.ang = self.ang_offset + self.cohete.ang
 
         # Actualizamos puntos de destino
-        self.x2 = self.x1 + np.cos(self.ang) * 200
-        self.y2 = self.y1 + np.sin(self.ang) * 200
+        self.x2 = self.x1 + np.cos(self.ang) * self.longitud_maxima
+        self.y2 = self.y1 + np.sin(self.ang) * self.longitud_maxima
+
+        # Comprobamos colisiones con entorno para ajustar el rayo
+        pts_corte = None
+        dist_min = 1
+        for i in range(len(self.cohete.entorno.bordes1) - 1):
+            # Primero comprobamos intersección para bordes 1
+            res_borde = interseccion(self.x1, self.y1, self.x2, self.y2,
+                                     *self.cohete.entorno.bordes1[i], *self.cohete.entorno.bordes1[i + 1])
+            # Si se devuelve una intersección con los bordes 1, entonces comprobamos si es mínimo
+            if res_borde:
+                pts_borde, dist_borde = res_borde
+                if dist_borde < dist_min:
+                    dist_min = dist_borde
+                    pts_corte = pts_borde
+
+            res_borde = interseccion(self.x1, self.y1, self.x2, self.y2,
+                                     *self.cohete.entorno.bordes2[i], *self.cohete.entorno.bordes2[i + 1])
+            # Si se devuelve una intersección con los bordes 2, entonces comprobamos si es mínimo
+            if res_borde:
+                pts_borde, dist_borde = res_borde
+                if dist_borde < dist_min:
+                    dist_min = dist_borde
+                    pts_corte = pts_borde
+
+        # Si existe un punto de corte (ya calculado como el mínimo), entonces lo establecemos como (x2, y2)
+        if pts_corte:
+            self.x2, self.y2 = pts_corte
 
     def render(self, ventana):
         """

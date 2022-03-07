@@ -33,9 +33,11 @@ class Entorno:
         """
         Llama a la función generar_nivel, carga el número de checkpoints.
         """
-        semilla = 2928370872#int(np.random.rand()*(2**32 - 1))
-        np.random.seed(semilla)
-        print(semilla)
+        # Ejemplo de colisión descomentando el código posterior #
+        # Ejemplos de semillas con colisión: 2928370872, 4084418319
+        # semilla = int(np.random.rand()*(2**32 - 1))
+        # np.random.seed(semilla)
+        # print(semilla)
         self.generar_nivel()
 
     def generar_nivel(self):
@@ -69,7 +71,8 @@ class Entorno:
         bordes2[0, 0] = self.pos_inicial[0] + 50
         bordes2[0, 1] = self.pos_inicial[1]
 
-        for i in range(1, segmentos):
+        i = 1
+        while i < segmentos:
             # Longitud del segmento actual
             longitud = np.random.randint(longitud_min, longitud_max)
 
@@ -91,6 +94,7 @@ class Entorno:
 
             # Comprobamos si existe colisión con el segmento anterior
             # En caso de producirse, retrocedemos N pasos o iteraciones
+            intersecta = False
             for j in range(i):
                 x3 = recorrido[j, 0]
                 y3 = recorrido[j, 1]
@@ -98,13 +102,14 @@ class Entorno:
                 y4 = recorrido[j+1, 1]
                 intersecta = interseccion(x_ant, y_ant, x, y, x3, y3, x4, y4)
                 if intersecta:
-                    print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-            ############################################################
+                    i = max(1, i-10)
+                    break
 
-            # Guardamos el recorrido en la matriz
-            recorrido[i, 0] = x
-            recorrido[i, 1] = y
-            recorrido[i, 2] = angulo
+            if not intersecta:
+                # Guardamos el recorrido en la matriz
+                recorrido[i, 0] = x
+                recorrido[i, 1] = y
+                recorrido[i, 2] = angulo
 
             # Establece si la anchura crece o decrece en el segmento
             # signo = 1 if np.random.rand() > 0.5 else -1
@@ -116,6 +121,9 @@ class Entorno:
             # bordes1[i, 1] = y + anchura * np.sin(angulo + 0.5 * np.pi)
             # bordes2[i, 0] = x - anchura * np.cos(angulo + 0.5 * np.pi)
             # bordes2[i, 1] = y - anchura * np.sin(angulo + 0.5 * np.pi)
+
+            # Aumentamos el contador
+            i += 1
 
         i = 0
         while i < segmentos:

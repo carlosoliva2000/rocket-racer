@@ -33,6 +33,9 @@ class Entorno:
         """
         Llama a la función generar_nivel, carga el número de checkpoints.
         """
+        semilla = 2928370872#int(np.random.rand()*(2**32 - 1))
+        np.random.seed(semilla)
+        print(semilla)
         self.generar_nivel()
 
     def generar_nivel(self):
@@ -88,6 +91,14 @@ class Entorno:
 
             # Comprobamos si existe colisión con el segmento anterior
             # En caso de producirse, retrocedemos N pasos o iteraciones
+            for j in range(i):
+                x3 = recorrido[j, 0]
+                y3 = recorrido[j, 1]
+                x4 = recorrido[j+1, 0]
+                y4 = recorrido[j+1, 1]
+                intersecta = interseccion(x_ant, y_ant, x, y, x3, y3, x4, y4)
+                if intersecta:
+                    print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
             ############################################################
 
             # Guardamos el recorrido en la matriz
@@ -222,7 +233,8 @@ class Cohete:
     VEL_ROT = 0.1
     ACELERACION = 0.5  # Aceleración lineal
     RAYOS = 7  # Número de rayos para realizar el raycast
-    COLOR = (255, 255, 255)
+    COLOR_ACTIVO = (255, 255, 255)
+    COLOR_INACTIVO = (0, 0, 0)
     RADIO = 10
 
     def __init__(self, entorno, pos_inicial=(0, 0)):
@@ -246,6 +258,9 @@ class Cohete:
         self.n_checkpoint, self.checkpoint = entorno.obtener_checkpoint_ant()
         self.n_checkpoint_sig, self.checkpoint_sig = entorno.obtener_checkpoint_sig()
 
+        # Observaciones
+        self.observaciones = None
+
         # Recompensa
         self.recompensa = 0
 
@@ -253,16 +268,52 @@ class Cohete:
         self.flag_colision = False
 
         # Raycast
+        # self.rayos = [Rayo(self, 0, 100)]
         self.rayos = [Rayo(self, np.pi / 2), Rayo(self, np.pi / 4), Rayo(self, 0),
                       Rayo(self, -np.pi / 4), Rayo(self, -np.pi / 2)]
-        # self.inicializar()
 
-    def inicializar(self, x=0):
+        # Color
+        self.color = self.COLOR_ACTIVO
+
+    def inicializar(self, pos_inicial=(0, 0)):
         """
         Define posición, velocidad, checkpoints, recompensa y actualiza raycast.
         """
-        self.x = x
-        pass
+        # Posición y orientación
+        self.pos_inicial = pos_inicial  # Usado cuando se mueve el entorno en vez del cohete
+        self.x = pos_inicial[0]
+        self.y = pos_inicial[1]
+        self.ang = 0  # Ángulo en radianes
+        self.vector_movimiento = None
+
+        # Velocidad
+        self.dx = 0
+        self.dy = 0
+
+        # Checkpoints
+        self.n_checkpoint, self.checkpoint = self.entorno.obtener_checkpoint_ant()
+        self.n_checkpoint_sig, self.checkpoint_sig = self.entorno.obtener_checkpoint_sig()
+
+        # Observaciones
+        self.observaciones = None
+
+        # Recompensa
+        self.recompensa = 0
+
+        # Flags
+        self.flag_colision = False
+
+        # Raycast
+        # self.rayos = [Rayo(self, 0, 100)]
+        self.rayos = [Rayo(self, np.pi / 2), Rayo(self, np.pi / 4), Rayo(self, 0),
+                      Rayo(self, -np.pi / 4), Rayo(self, -np.pi / 2)]
+
+        # Actualiza el raycast y las observaciones
+        self.actualizar_raycast()
+        self.actualizar_observaciones()
+
+        # Color
+        self.color = self.COLOR_ACTIVO
 
     def actualizar(self, accion):
         """
@@ -273,8 +324,10 @@ class Cohete:
         self.comprobar_colision_checkpoints()
         self.comprobar_colision_entorno()
 
-        for rayo in self.rayos:
-            rayo.actualizar()
+        self.actualizar_raycast()
+
+        self.actualizar_observaciones()
+        self.actualizar_recompensa()
 
     def rotar(self, rotacion):
         """
@@ -328,6 +381,7 @@ class Cohete:
             if interseccion(*self.vector_movimiento, *checkpoint):
                 # if i != self.n_checkpoint_sig:
                 #     print(f"HE SALTADO {i-self.n_checkpoint} PASOS")
+
                 self.n_checkpoint, self.checkpoint = i, checkpoint
                 self.n_checkpoint_sig, self.checkpoint_sig = self.entorno.obtener_checkpoint_sig(self.n_checkpoint)
                 colision = True
@@ -369,8 +423,8 @@ class Cohete:
             # Comprobamos si se ha atravesado una pared mediante vector movimiento
             if (interseccion(*self.vector_movimiento, *self.entorno.bordes1[i], *self.entorno.bordes1[i + 1]) or
                     interseccion(*self.vector_movimiento, *self.entorno.bordes2[i], *self.entorno.bordes2[i + 1])):
-                self.COLOR = (0, 0, 0)
-                print("HE ATRAVESADO")
+                self.color = self.COLOR_INACTIVO
+                # print("HE ATRAVESADO")
                 self.flag_colision = True
                 break
 
@@ -378,19 +432,20 @@ class Cohete:
         """
         Actualiza cada rayo, colocándolo alrededor del cohete y definiendo su longitud.
         """
-        pass
+        for rayo in self.rayos:
+            rayo.actualizar()
 
     def actualizar_observaciones(self):
         """
         Almacena en observaciones las distancias de los rayos y otras necesarias.
         """
-        pass
+        self.observaciones = [r.longitud_interp for r in self.rayos]
 
     def actualizar_recompensa(self):
         """
         Almacena en recompensa los puntos obtenidos en esa actualización.
         """
-        pass
+        self.recompensa = float(self.n_checkpoint)
 
     def render(self, ventana):
         """
@@ -404,11 +459,11 @@ class Cohete:
         # pygame.draw.line(ventana, self.COLOR, (self.x, self.y), (self.x + np.cos(self.ang) * 10,
         #                                                         self.y + np.sin(self.ang) * 10))
         # Cuerpo del cohete
-        pygame.gfxdraw.aacircle(ventana, int(self.x), int(self.y), self.RADIO, self.COLOR)
-        pygame.gfxdraw.filled_circle(ventana, int(self.x), int(self.y), self.RADIO, self.COLOR)
+        pygame.gfxdraw.aacircle(ventana, int(self.x), int(self.y), self.RADIO, self.color)
+        pygame.gfxdraw.filled_circle(ventana, int(self.x), int(self.y), self.RADIO, self.color)
 
         # Orientación
-        pygame.draw.aaline(ventana, self.COLOR, (self.x, self.y), (self.x + np.cos(self.ang) * 2 * self.RADIO,
+        pygame.draw.aaline(ventana, self.color, (self.x, self.y), (self.x + np.cos(self.ang) * 2 * self.RADIO,
                                                                    self.y + np.sin(self.ang) * 2 * self.RADIO))
 
         # Vector velocidad
@@ -420,6 +475,8 @@ class Cohete:
 
 
 class Rayo:
+    COLOR = (0, 255, 0)
+
     def __init__(self, cohete, ang_offset, longitud_maxima = 1000):
         self.cohete = cohete
         self.x1 = cohete.x
@@ -429,6 +486,9 @@ class Rayo:
         self.x2 = cohete.x
         self.y2 = cohete.y
         self.longitud_maxima = longitud_maxima
+        self.longitud = longitud_maxima
+        self.longitud_interp = 1
+        self.flag_interseccion = False
 
     def actualizar(self):
         # Actualizamos poisición en función de la del cohete
@@ -468,13 +528,20 @@ class Rayo:
         # Si existe un punto de corte (ya calculado como el mínimo), entonces lo establecemos como (x2, y2)
         if pts_corte:
             self.x2, self.y2 = pts_corte
+            self.longitud = dist_min * self.longitud_maxima
+            self.longitud_interp = np.interp(self.longitud, [0, self.longitud_maxima], [-1, 1])
+            self.flag_interseccion = True
+        else:
+            self.longitud = self.longitud_maxima
+            self.longitud_interp = 1
+            self.flag_interseccion = False
 
     def render(self, ventana):
         """
         Renderiza el rayo.
         :param ventana: display o ventana donde se mostrará el rayo
         """
-        pygame.draw.aaline(ventana, (0, 255, 0), (self.x1, self.y1), (self.x2, self.y2))
+        pygame.draw.aaline(ventana, self.COLOR, (self.x1, self.y1), (self.x2, self.y2))
 
 
 class Juego(gym.Env):
@@ -494,6 +561,7 @@ class Juego(gym.Env):
             self.ventana = None
             self.ancho = 0
             self.alto = 0
+            self.fuente = None
         else:
             self.inicializar_render()
 
@@ -509,8 +577,16 @@ class Juego(gym.Env):
         """
         self.cohete.actualizar(action)
 
+        return self.cohete.observaciones, self.cohete.recompensa, self.cohete.flag_colision, None
+
     def reset(self):
-        pass
+        # Reiniciar el entorno
+        self.entorno.inicializar()
+
+        # Reiniciar el cohete
+        self.cohete.inicializar((self.ancho // 2, self.alto // 2))
+
+        return self.cohete.observaciones
 
     def render(self, mode="human"):
         """
@@ -528,6 +604,11 @@ class Juego(gym.Env):
         # Renderizamos el cohete
         self.cohete.render(self.ventana)
 
+        # Renderizamos la GUI
+        self.imprimir_texto(f"Recompensa: {self.cohete.recompensa}", 10, 10)
+        self.imprimir_texto(f"Checkpoint: {self.cohete.n_checkpoint}", 200, 10)
+        self.imprimir_texto(f"Colisión: {self.cohete.flag_colision}", 400, 10)
+
         # Actualizamos la pantalla con el frame generado
         pygame.display.update()
 
@@ -537,3 +618,10 @@ class Juego(gym.Env):
         self.ventana = pygame.display.set_mode((ancho, alto))
         self.ancho = ancho
         self.alto = alto
+        self.fuente = pygame.font.Font(pygame.font.get_default_font(), 20)
+
+    def imprimir_texto(self, texto, x, y):
+        texto_surface = self.fuente.render(texto, True, (255, 255, 255))
+        texto_rect = texto_surface.get_rect()
+        texto_rect.topleft = (x, y)
+        self.ventana.blit(texto_surface, texto_rect)

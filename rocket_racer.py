@@ -15,6 +15,18 @@ def interseccion(x1, y1, x2, y2, x3, y3, x4, y4):
     return None
 
 
+def proyeccion(x, y, x1, y1, x2, y2):
+    if x1 == x2:
+        return x1, y
+
+    a = (y2 - y1) / (x2 - x1)
+    b = y1 - a * x1
+    x_proyectado = (x * (1 / a) + y - b) * 1 / (a + 1 / a)
+    y_proyectado = a * x_proyectado + b
+
+    return x_proyectado, y_proyectado
+
+
 class Entorno:
     COLOR = (50, 50, 50)
 
@@ -237,7 +249,7 @@ class Entorno:
 
 
 class Cohete:
-    # VEL_MAX = 5
+    VEL_MAX_CUADRADADA = 900
     VEL_ROT = 0.1
     ACELERACION = 0.5  # Aceleración lineal
     RAYOS = 7  # Número de rayos para realizar el raycast
@@ -265,6 +277,10 @@ class Cohete:
         # Checkpoints
         self.n_checkpoint, self.checkpoint = entorno.obtener_checkpoint_ant()
         self.n_checkpoint_sig, self.checkpoint_sig = entorno.obtener_checkpoint_sig()
+        self.xp = None
+        self.yp = None
+        self.xp_sig = None
+        self.yp_sig = None
 
         # Observaciones
         self.observaciones = None
@@ -301,6 +317,10 @@ class Cohete:
         # Checkpoints
         self.n_checkpoint, self.checkpoint = self.entorno.obtener_checkpoint_ant()
         self.n_checkpoint_sig, self.checkpoint_sig = self.entorno.obtener_checkpoint_sig()
+        self.xp = None
+        self.yp = None
+        self.xp_sig = None
+        self.yp_sig = None
 
         # Observaciones
         self.observaciones = None
@@ -447,13 +467,48 @@ class Cohete:
         """
         Almacena en observaciones las distancias de los rayos y otras necesarias.
         """
-        self.observaciones = [r.longitud_interp for r in self.rayos]
+        # Distancias de todos los rayos
+        dist_rayos_interp = [r.longitud_interp for r in self.rayos]
+
+        # Velocidad del cohete
+        velocidad = self.dx ** 2 + self.dy ** 2
+        velocidad_interp = np.interp(velocidad, [0, self.VEL_MAX_CUADRADADA], [-1, 1])
+
+        # Diferencia angular entre orientación y vector velocidad
+        angulo_vel = np.arctan2(self.dy, self.dx)
+        if velocidad == 0.0:
+            dif_ang = 0.0
+        else:
+            dif_ang = np.clip(angulo_vel - self.ang, -np.pi, np.pi)
+        dif_ang_interp = np.interp(dif_ang, [-np.pi, np.pi], [-1, 1])
+
+        # Diferencia angular entre orientación y punto más cercano del siguiente checkpoint
+        # Primero, calculamos la proyección perpendicular en el siguiente checkpoint
+        self.xp, self.yp = proyeccion(self.x, self.y, *self.checkpoint)
+        self.xp_sig, self.yp_sig = proyeccion(self.x, self.y, *self.checkpoint_sig)
+
+        # Segundo, calculamos la distancia entre la posición y el punto proyectado
+        dx = self.xp_sig - self.x
+        dy = self.yp_sig - self.y
+
+        # Tercero, como anteriormente, calculamos la diferencia angular
+        ang_proyeccion = np.arctan2(dy, dx)
+        dif_ang_proyeccion = np.clip(ang_proyeccion - self.ang, -np.pi, np.pi)
+        dif_ang_proyeccion_interp = np.interp(dif_ang_proyeccion, [-np.pi, np.pi], [-1, 1])
+
+        self.observaciones = np.concatenate((dist_rayos_interp,
+                                             (velocidad_interp, dif_ang_interp, dif_ang_proyeccion_interp)))
 
     def actualizar_recompensa(self):
         """
         Almacena en recompensa los puntos obtenidos en esa actualización.
         """
-        self.recompensa = float(self.n_checkpoint)
+        #self.recompensa = float(self.n_checkpoint)
+        dist_cp = np.sqrt((self.x-self.xp)**2+(self.y-self.yp)**2)
+        dist_cp_sig = np.sqrt((self.x-self.xp_sig)**2+(self.y-self.yp_sig)**2)
+        self.recompensa = self.n_checkpoint + 1 * (dist_cp/(dist_cp+dist_cp_sig))
+        #self.reward_total = self.n_lap * self.env.n_goals + self.level + 1 * (distance0/(distance0+distance1))
+        #self.reward_step = self.reward_total - reward_total_previous
 
     def render(self, ventana):
         """
@@ -480,6 +535,8 @@ class Cohete:
         # Marcar siguiente y anterior checkpoint
         pygame.draw.line(ventana, (0, 255, 255), self.checkpoint_sig[:2], self.checkpoint_sig[2:])
         pygame.draw.line(ventana, (255, 0, 255), self.checkpoint[:2], self.checkpoint[2:])
+        pygame.draw.circle(ventana, (255, 255, 255), (self.xp, self.yp), 4)
+        pygame.draw.circle(ventana, (255, 255, 255), (self.xp_sig, self.yp_sig), 4)
 
 
 class Rayo:
@@ -614,8 +671,9 @@ class Juego(gym.Env):
 
         # Renderizamos la GUI
         self.imprimir_texto(f"Recompensa: {self.cohete.recompensa}", 10, 10)
-        self.imprimir_texto(f"Checkpoint: {self.cohete.n_checkpoint}", 200, 10)
-        self.imprimir_texto(f"Colisión: {self.cohete.flag_colision}", 400, 10)
+        self.imprimir_texto(f"Checkpoint: {self.cohete.n_checkpoint}", 10, 30)
+        self.imprimir_texto(f"Colisión: {self.cohete.flag_colision}", 10, 50)
+        self.imprimir_texto(f"Velocidad: {self.cohete.dx**2 + self.cohete.dy**2}", 10, 70)
 
         # Actualizamos la pantalla con el frame generado
         pygame.display.update()

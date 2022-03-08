@@ -1,7 +1,0 @@
-{
-  "env": "<class 'rocket_racer.Juego'>",
-  "env_config": {
-    "render": true
-  },
-  "render_env": true
-}

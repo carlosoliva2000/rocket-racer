@@ -1,4 +1,3 @@
-import sys
 import gym
 import numpy as np
 import pygame
@@ -257,7 +256,7 @@ class Cohete:
     COLOR_INACTIVO = (0, 0, 0)
     RADIO = 10
 
-    def __init__(self, entorno, pos_inicial=(0, 0)):
+    def __init__(self, entorno, pos_inicial=(0, 0), frames=1000):
         """
         Define el entorno y llama a inicializar.
         """
@@ -287,9 +286,13 @@ class Cohete:
 
         # Recompensa
         self.recompensa = 0
+        self.recompensa_step = 0
 
         # Flags
         self.flag_colision = False
+        self.flag_finrecorrido = False
+        self.flag_timeover = False
+        self.flag_done = False
 
         # Raycast
         # self.rayos = [Rayo(self, 0, 100)]
@@ -299,7 +302,11 @@ class Cohete:
         # Color
         self.color = self.COLOR_ACTIVO
 
-    def inicializar(self, pos_inicial=(0, 0)):
+        # Frames que está activo el cohete
+        self.frames_totales = frames
+        self.frames = frames
+
+    def inicializar(self, pos_inicial=(0, 0), frames=1000):
         """
         Define posición, velocidad, checkpoints, recompensa y actualiza raycast.
         """
@@ -327,9 +334,13 @@ class Cohete:
 
         # Recompensa
         self.recompensa = 0
+        self.recompensa_step = 0
 
         # Flags
         self.flag_colision = False
+        self.flag_finrecorrido = False
+        self.flag_timeover = False
+        self.flag_done = False
 
         # Raycast
         # self.rayos = [Rayo(self, 0, 100)]
@@ -343,19 +354,30 @@ class Cohete:
         # Color
         self.color = self.COLOR_ACTIVO
 
+        # Frames que está activo el cohete
+        self.frames_totales = frames
+        self.frames = frames
+
     def actualizar(self, accion):
         """
         Rota, acelera y mueve, comprueba colisiones, actualiza el raycast, actualiza las observaciones y su recompensa.
         """
-        self.mover(accion)
+        if not self.flag_done:
+            self.mover(accion)
 
-        self.comprobar_colision_checkpoints()
-        self.comprobar_colision_entorno()
+            self.comprobar_colision_checkpoints()
+            self.comprobar_colision_entorno()
 
-        self.actualizar_raycast()
+            if not self.flag_colision:
+                self.actualizar_raycast()
 
-        self.actualizar_observaciones()
-        self.actualizar_recompensa()
+            self.actualizar_observaciones()
+            self.actualizar_recompensa()
+
+            # Actualizamos frames y el flag done en función del resto
+            self.frames -= 1
+            self.flag_timeover = (self.frames == 0)
+            self.flag_done = self.flag_colision or self.flag_timeover or self.flag_finrecorrido
 
     def rotar(self, rotacion):
         """
@@ -426,6 +448,9 @@ class Cohete:
                     self.n_checkpoint, self.checkpoint = self.entorno.obtener_checkpoint_ant(i)
                     self.n_checkpoint_sig, self.checkpoint_sig = self.entorno.obtener_checkpoint_sig(self.n_checkpoint)
                     break
+        else:
+            # Si ha habido colisión hacia adelante, puede haber finalizado el recorrido
+            self.flag_finrecorrido = (self.n_checkpoint == self.n_checkpoint_sig)
 
         """
         #### CÓDIGO DEPRECADO/OBSOLETO ####
@@ -503,12 +528,27 @@ class Cohete:
         """
         Almacena en recompensa los puntos obtenidos en esa actualización.
         """
-        #self.recompensa = float(self.n_checkpoint)
+        # self.recompensa = float(self.n_checkpoint)
+
+        recompensa_total = self.recompensa
+
         dist_cp = np.sqrt((self.x-self.xp)**2+(self.y-self.yp)**2)
         dist_cp_sig = np.sqrt((self.x-self.xp_sig)**2+(self.y-self.yp_sig)**2)
-        self.recompensa = self.n_checkpoint + 1 * (dist_cp/(dist_cp+dist_cp_sig))
-        #self.reward_total = self.n_lap * self.env.n_goals + self.level + 1 * (distance0/(distance0+distance1))
-        #self.reward_step = self.reward_total - reward_total_previous
+
+        ###### ESTO SE TIENE QUE SOLUCIONAR DIFERENTE #######
+        if self.n_checkpoint:
+            self.recompensa = self.n_checkpoint + 1 * (dist_cp/(dist_cp+dist_cp_sig))
+        else:
+            self.recompensa = self.n_checkpoint + 1/dist_cp_sig
+
+        if self.flag_colision:
+            self.recompensa -= 10
+        elif self.flag_finrecorrido:
+            self.recompensa += 10 * (self.frames/self.frames_totales)
+        self.recompensa_step = self.recompensa - recompensa_total
+
+        # self.reward_total = self.n_lap * self.env.n_goals + self.level + 1 * (distance0/(distance0+distance1))
+        # self.reward_step = self.reward_total - reward_total_previous
 
     def render(self, ventana):
         """
@@ -648,7 +688,7 @@ class Juego(gym.Env):
         """
         self.cohete.actualizar(action)
 
-        return self.cohete.observaciones, self.cohete.recompensa, self.cohete.flag_colision, {}
+        return self.cohete.observaciones, self.cohete.recompensa_step, self.cohete.flag_done, {}
 
     def reset(self):
         # Reiniciar el entorno
@@ -676,10 +716,14 @@ class Juego(gym.Env):
         self.cohete.render(self.ventana)
 
         # Renderizamos la GUI
-        self.imprimir_texto(f"Recompensa: {self.cohete.recompensa}", 10, 10)
-        self.imprimir_texto(f"Checkpoint: {self.cohete.n_checkpoint}", 10, 30)
-        self.imprimir_texto(f"Colisión: {self.cohete.flag_colision}", 10, 50)
-        self.imprimir_texto(f"Velocidad: {self.cohete.dx**2 + self.cohete.dy**2}", 10, 70)
+        self.imprimir_texto(f"Frames: {self.cohete.frames}", 10, 10)
+        self.imprimir_texto(f"Recompensa total: {self.cohete.recompensa}", 10, 30)
+        self.imprimir_texto(f"Recompensa step: {self.cohete.recompensa_step}", 10, 50)
+        self.imprimir_texto(f"Checkpoint: {self.cohete.n_checkpoint}", 10, 70)
+        self.imprimir_texto(f"Velocidad: {self.cohete.dx**2 + self.cohete.dy**2}", 10, 90)
+        self.imprimir_texto(f"Colisión: {self.cohete.flag_colision}", 10, 110)
+        self.imprimir_texto(f"Timeover: {self.cohete.flag_timeover}", 10, 130)
+        self.imprimir_texto(f"Fin recorrido: {self.cohete.flag_finrecorrido}", 10, 150)
 
         # Actualizamos la pantalla con el frame generado
         pygame.display.update()

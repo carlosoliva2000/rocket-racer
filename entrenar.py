@@ -8,7 +8,10 @@ tune.run(run_or_experiment="SAC",
          config={
              "env": Juego,
              "render_env": True,
-             "env_config": {
-                 "render": True
-             }
-         })
+             "num_workers": 4
+         }
+         # ,
+         # stop={
+         #     "timestep_total": 5_000_000
+         # }
+         )

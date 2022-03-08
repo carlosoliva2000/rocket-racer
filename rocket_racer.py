@@ -170,11 +170,11 @@ class Entorno:
                     break
 
         # Ajustes para comenzar siempre hacia la derecha y recto
-        borde1_inicio = np.array([[self.pos_inicial[0] - 100, self.pos_inicial[1]],
+        borde1_inicio = np.array([[self.pos_inicial[0] - 50, self.pos_inicial[1] - 10],
                                   [self.pos_inicial[0] - 50, self.pos_inicial[1] + 100]])
-        borde2_inicio = np.array([[self.pos_inicial[0] - 100, self.pos_inicial[1]],
+        borde2_inicio = np.array([[self.pos_inicial[0] - 50, self.pos_inicial[1] + 10],
                                   [self.pos_inicial[0] - 50, self.pos_inicial[1] - 100]])
-        recorrido_inicio = np.array([[self.pos_inicial[0] - 100, self.pos_inicial[1]],
+        recorrido_inicio = np.array([[self.pos_inicial[0] - 50, self.pos_inicial[1]],
                                      [self.pos_inicial[0] - 50, self.pos_inicial[1]]])
         # Concatenamos los inicios a las listas, y en el caso de recorrido, recortamos las columnas
         # para quedarnos solo con las posiciones x e y
@@ -183,9 +183,9 @@ class Entorno:
         bordes2 = np.concatenate([borde2_inicio, bordes2], axis=0)
 
         # Creamos los checkpoints como vectores que contienen los puntos en cada borde a lo largo de la pista
-        checkpoints = np.zeros((segmentos, 4))
-        checkpoints[:, [0, 1]] = np.copy(bordes1)[2:]
-        checkpoints[:, [2, 3]] = np.copy(bordes2)[2:]
+        checkpoints = np.zeros((len(recorrido)-1, 4))
+        checkpoints[:, [0, 1]] = np.copy(bordes1)[1:]
+        checkpoints[:, [2, 3]] = np.copy(bordes2)[1:]
 
         self.recorrido = recorrido  # [:, :2]
         self.bordes1 = bordes1
@@ -229,8 +229,8 @@ class Entorno:
 
         for i in range(len(self.recorrido) - 1):
             # Checkpoints
-            if i < len(self.recorrido) - 2:
-                pygame.draw.line(ventana, (80, 80, 80), self.checkpoints[i, :2], self.checkpoints[i, 2:])
+            #if i < len(self.recorrido) - 1:
+            pygame.draw.line(ventana, (80, 80, 80), self.checkpoints[i, :2], self.checkpoints[i, 2:])
             # pygame.draw.line(ventana, (80, 80, 80), self.bordes1[i], self.bordes2[i], 3)
 
             # Carril central del recorrido
@@ -294,10 +294,10 @@ class Cohete:
         self.flag_timeover = False
         self.flag_done = False
 
-        # Raycast
-        # self.rayos = [Rayo(self, 0, 100)]
-        self.rayos = [Rayo(self, np.pi / 2), Rayo(self, np.pi / 4), Rayo(self, 0),
-                      Rayo(self, -np.pi / 4), Rayo(self, -np.pi / 2)]
+        # Raycast (7 rayos entre -90 y 90 grados)
+        self.rayos = [Rayo(self, ang) for ang in np.linspace(-np.pi/2, np.pi/2, 7)]
+        # self.rayos = [Rayo(self, np.pi / 2), Rayo(self, np.pi / 4), Rayo(self, 0),
+        #               Rayo(self, -np.pi / 4), Rayo(self, -np.pi / 2)]
 
         # Color
         self.color = self.COLOR_ACTIVO
@@ -342,10 +342,10 @@ class Cohete:
         self.flag_timeover = False
         self.flag_done = False
 
-        # Raycast
-        # self.rayos = [Rayo(self, 0, 100)]
-        self.rayos = [Rayo(self, np.pi / 2), Rayo(self, np.pi / 4), Rayo(self, 0),
-                      Rayo(self, -np.pi / 4), Rayo(self, -np.pi / 2)]
+        # Raycast (7 rayos entre -90 y 90 grados)
+        self.rayos = [Rayo(self, ang) for ang in np.linspace(-np.pi/2, np.pi/2, 7)]
+        # self.rayos = [Rayo(self, np.pi / 2), Rayo(self, np.pi / 4), Rayo(self, 0),
+        #               Rayo(self, -np.pi / 4), Rayo(self, -np.pi / 2)]
 
         # Actualiza el raycast y las observaciones
         self.actualizar_raycast()
@@ -395,6 +395,9 @@ class Cohete:
         """
         Acelera el cohete (transforma su velocidad, no su posición).
         """
+        if aceleracion < 0:
+            aceleracion *= 0.5
+
         self.dx += self.ACELERACION * aceleracion * np.cos(self.ang)
         self.dy += self.ACELERACION * aceleracion * np.sin(self.ang)
 
@@ -535,16 +538,12 @@ class Cohete:
         dist_cp = np.sqrt((self.x-self.xp)**2+(self.y-self.yp)**2)
         dist_cp_sig = np.sqrt((self.x-self.xp_sig)**2+(self.y-self.yp_sig)**2)
 
-        ###### ESTO SE TIENE QUE SOLUCIONAR DIFERENTE #######
-        if self.n_checkpoint:
-            self.recompensa = self.n_checkpoint + 1 * (dist_cp/(dist_cp+dist_cp_sig))
-        else:
-            self.recompensa = self.n_checkpoint + 1/dist_cp_sig
+        self.recompensa = self.n_checkpoint + 1 * (dist_cp/(dist_cp+dist_cp_sig))
 
         if self.flag_colision:
             self.recompensa -= 10
         elif self.flag_finrecorrido:
-            self.recompensa += 10 * (self.frames/self.frames_totales)
+            self.recompensa += 10 + 10 * (self.frames/self.frames_totales)
         self.recompensa_step = self.recompensa - recompensa_total
 
         # self.reward_total = self.n_lap * self.env.n_goals + self.level + 1 * (distance0/(distance0+distance1))
@@ -650,31 +649,22 @@ class Rayo:
 
 
 class Juego(gym.Env):
-    def __init__(self, env_config=None):
+    def __init__(self, env_config={}):
         """
         Define action_space y observation_space. Contiene referencias a entorno y cohetes.
         Contiene ventana donde renderizar todo.
         """
+        # Espacio de acciones y observaciones
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))
-        self.observation_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(8,))
-
-        # Obtenemos opciones de configuración del entorno
-        if env_config:
-            render = env_config['render']
-        else:
-            render = False
+        self.observation_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(10,))
 
         # Atributos realizados con PyGame
-        if not render:
-            print("WARNING: Las opciones de renderizado no han sido activadas. Llamar a render() lanzará un error.\n"
-                  "         Para activarlo, llame a inicializar_render().")
-            self.clock = None
-            self.ventana = None
-            self.ancho = 0
-            self.alto = 0
-            self.fuente = None
-        else:
-            self.inicializar_render()
+        self.flag_render = False
+        self.clock = None
+        self.ventana = None
+        self.ancho = 800
+        self.alto = 600
+        self.fuente = None
 
         self.entorno = Entorno((self.ancho // 2, self.alto // 2))
         self.cohete = Cohete(self.entorno, (self.ancho // 2, self.alto // 2))
@@ -705,6 +695,8 @@ class Juego(gym.Env):
         :param mode: POR DEFINIR.
         :return: POR DEFINIR.
         """
+        if not self.flag_render:
+            self.inicializar_render()
 
         # Limpiamos pantalla
         # self.ventana.fill((0, 0, 0))
@@ -729,6 +721,8 @@ class Juego(gym.Env):
         pygame.display.update()
 
     def inicializar_render(self, ancho=800, alto=600):
+        self.flag_render = True
+
         pygame.init()
         self.clock = pygame.time.Clock()
         self.ventana = pygame.display.set_mode((ancho, alto))

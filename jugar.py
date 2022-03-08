@@ -26,7 +26,7 @@ def manejar_entrada(teclas):
     return [accion_acelerar, accion_rotar]
 
 
-juego = Juego(render=True)
+juego = Juego(env_config={'render': True})
 # juego.inicializar_render()
 
 while True:

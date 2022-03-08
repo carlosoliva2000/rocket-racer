@@ -393,7 +393,7 @@ class Cohete:
 
         # Se calcula el vector movimiento para comprobar colisiones posteriormente
         # Contiene las componentes de posición en el instante inicial y en el posterior
-        self.vector_movimiento = [self.x, self.y, self.x + self.dx, self.y + self.dy]
+        self.vector_movimiento = [self.x, self.y, self.x - self.dx, self.y - self.dy]
 
     def comprobar_colision_checkpoints(self):
         """
@@ -610,13 +610,19 @@ class Rayo:
 
 
 class Juego(gym.Env):
-    def __init__(self, render=False):
+    def __init__(self, env_config=None):
         """
         Define action_space y observation_space. Contiene referencias a entorno y cohetes.
         Contiene ventana donde renderizar todo.
         """
-        self.action_space = []
-        self.observation_space = []
+        self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))
+        self.observation_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(8,))
+
+        # Obtenemos opciones de configuración del entorno
+        if env_config:
+            render = env_config['render']
+        else:
+            render = False
 
         # Atributos realizados con PyGame
         if not render:
@@ -642,7 +648,7 @@ class Juego(gym.Env):
         """
         self.cohete.actualizar(action)
 
-        return self.cohete.observaciones, self.cohete.recompensa, self.cohete.flag_colision, None
+        return self.cohete.observaciones, self.cohete.recompensa, self.cohete.flag_colision, {}
 
     def reset(self):
         # Reiniciar el entorno
